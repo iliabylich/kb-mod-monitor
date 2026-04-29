@@ -1,0 +1,11 @@
+[Unit]
+Description=Caps Lock activation daemon
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/caps-lock-daemon
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
