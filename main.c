@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 
+#include "ioctl-wrapper.h"
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -11,24 +12,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/ioctl.h>
+#include <sys/inotify.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <unistd.h>
 #include <xkbcommon/xkbcommon.h>
-
-#ifndef KEY_MAX
-#define KEY_MAX 0x2ff
-#endif
-
-#ifndef EV_MAX
-#define EV_MAX 0x1f
-#endif
-
-#ifndef LED_MAX
-#define LED_MAX 0x0f
-#endif
 
 #define INPUT_DIR "/dev/input"
 #define EVENT_PREFIX "event"
@@ -53,11 +42,6 @@ struct socket_server {
 static void handle_signal(int signal_number) {
   (void)signal_number;
   running = 0;
-}
-
-static bool test_bit(const unsigned long *bits, unsigned int bit) {
-  return (bits[bit / (8 * sizeof(unsigned long))] &
-          (1UL << (bit % (8 * sizeof(unsigned long))))) != 0;
 }
 
 static int setup_signals(void) {
@@ -276,24 +260,7 @@ static void reap_disconnected_clients(struct socket_server *server,
 }
 
 static bool device_has_caps_lock(int fd) {
-  unsigned long ev_bits[(EV_MAX + (8 * sizeof(unsigned long))) /
-                        (8 * sizeof(unsigned long))] = {0};
-  unsigned long key_bits[(KEY_MAX + (8 * sizeof(unsigned long))) /
-                         (8 * sizeof(unsigned long))] = {0};
-
-  if (ioctl(fd, EVIOCGBIT(0, sizeof(ev_bits)), ev_bits) < 0) {
-    return false;
-  }
-
-  if (!test_bit(ev_bits, EV_KEY)) {
-    return false;
-  }
-
-  if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(key_bits)), key_bits) < 0) {
-    return false;
-  }
-
-  return test_bit(key_bits, KEY_CAPSLOCK);
+  return ioctl_has_EV_KEY_bit(fd) && ioctl_has_KEY_CAPSLOCK_bit(fd);
 }
 
 static int open_input_devices(struct input_device devices[], nfds_t capacity) {
@@ -306,6 +273,7 @@ static int open_input_devices(struct input_device devices[], nfds_t capacity) {
   int count = 0;
   struct dirent *entry;
   while ((entry = readdir(dir)) != NULL) {
+    fprintf(stderr, "d_name = %s\n", entry->d_name);
     if (strncmp(entry->d_name, EVENT_PREFIX, strlen(EVENT_PREFIX)) != 0) {
       continue;
     }
@@ -338,9 +306,7 @@ static int open_input_devices(struct input_device devices[], nfds_t capacity) {
     device->fd = fd;
     snprintf(device->path, sizeof(device->path), "%s", path);
 
-    if (ioctl(fd, EVIOCGNAME(sizeof(device->name)), device->name) < 0) {
-      snprintf(device->name, sizeof(device->name), "unknown");
-    }
+    ioctl_get_DEVICE_NAME(fd, device->name, sizeof(device->name));
 
     fprintf(stderr, "watching %s (%s)\n", device->path, device->name);
     count++;
@@ -354,22 +320,53 @@ static void close_input_devices(struct input_device devices[], int count) {
   for (int i = 0; i < count; i++) {
     if (devices[i].fd >= 0) {
       close(devices[i].fd);
+      devices[i].fd = -1;
     }
+  }
+}
+
+static int setup_input_dir_watcher(void) {
+  int fd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
+  if (fd < 0) {
+    fprintf(stderr, "inotify_init1: %s\n", strerror(errno));
+    return -1;
+  }
+
+  if (inotify_add_watch(fd, INPUT_DIR,
+                        IN_CREATE | IN_DELETE | IN_ATTRIB | IN_MOVED_FROM |
+                            IN_MOVED_TO) < 0) {
+    fprintf(stderr, "inotify_add_watch(" INPUT_DIR "): %s\n", strerror(errno));
+    close(fd);
+    return -1;
+  }
+
+  return fd;
+}
+
+static void drain_input_dir_events(int fd) {
+  for (;;) {
+    char buffer[4096];
+    ssize_t bytes_read = read(fd, buffer, sizeof(buffer));
+    if (bytes_read > 0) {
+      continue;
+    }
+
+    if (bytes_read < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+      return;
+    }
+
+    if (bytes_read < 0 && errno == EINTR) {
+      return;
+    }
+
+    return;
   }
 }
 
 static bool any_device_reports_caps_led_active(struct input_device devices[],
                                                int count) {
-  unsigned long led_bits[(LED_MAX + (8 * sizeof(unsigned long))) /
-                         (8 * sizeof(unsigned long))] = {0};
-
   for (int i = 0; i < count; i++) {
-    memset(led_bits, 0, sizeof(led_bits));
-    if (ioctl(devices[i].fd, EVIOCGLED(sizeof(led_bits)), led_bits) < 0) {
-      continue;
-    }
-
-    if (test_bit(led_bits, LED_CAPSL)) {
+    if (ioctl_has_CAPSLOCK_LED_bit(devices[i].fd)) {
       return true;
     }
   }
@@ -437,6 +434,7 @@ static int process_event(struct xkb_state *state, struct socket_server *server,
   xkb_state_update_key(state, keycode, direction);
 
   bool caps_active = caps_lock_is_active(state);
+  fprintf(stderr, "%s\n", caps_active ? "activated" : "deactivated");
   if (caps_active != *caps_was_active) {
     broadcast_caps_state(server, caps_active);
   }
@@ -536,14 +534,20 @@ int main(void) {
   seed_caps_lock_state(
       keymap, state, any_device_reports_caps_led_active(devices, device_count));
   bool caps_was_active = caps_lock_is_active(state);
+  int input_dir_fd = setup_input_dir_watcher();
+
   while (running) {
-    struct pollfd pollfds[1 + MAX_DEVICES + MAX_CLIENTS] = {0};
-    nfds_t input_index = 1;
+    struct pollfd pollfds[2 + MAX_DEVICES + MAX_CLIENTS] = {0};
+    nfds_t input_dir_index = 1;
+    nfds_t input_index = 2;
     nfds_t client_index = input_index + (nfds_t)device_count;
     nfds_t pollfd_count = client_index + MAX_CLIENTS;
 
     pollfds[0].fd = server.listen_fd;
     pollfds[0].events = POLLIN;
+
+    pollfds[input_dir_index].fd = input_dir_fd;
+    pollfds[input_dir_index].events = POLLIN;
 
     for (int i = 0; i < device_count; i++) {
       pollfds[input_index + (nfds_t)i].fd = devices[i].fd;
@@ -565,6 +569,22 @@ int main(void) {
       break;
     }
 
+    if ((pollfds[input_dir_index].revents & POLLIN) != 0) {
+      drain_input_dir_events(input_dir_fd);
+      fprintf(stderr, INPUT_DIR " changed; rescanning input devices\n");
+      close_input_devices(devices, device_count);
+      device_count = open_input_devices(devices, MAX_DEVICES);
+      if (device_count < 0) {
+        break;
+      }
+
+      seed_caps_lock_state(
+          keymap, state,
+          any_device_reports_caps_led_active(devices, device_count));
+      caps_was_active = caps_lock_is_active(state);
+      continue;
+    }
+
     if ((pollfds[0].revents & POLLIN) != 0) {
       if (accept_clients(&server, caps_was_active) < 0) {
         break;
@@ -572,7 +592,16 @@ int main(void) {
     }
 
     for (int i = 0; i < device_count; i++) {
-      if ((pollfds[input_index + (nfds_t)i].revents & POLLIN) != 0) {
+      short revents = pollfds[input_index + (nfds_t)i].revents;
+      if ((revents & (POLLHUP | POLLERR | POLLNVAL)) != 0) {
+        fprintf(stderr, "%s stopped producing input events (revents=0x%x)\n",
+                devices[i].path, revents);
+        close(devices[i].fd);
+        devices[i].fd = -1;
+        continue;
+      }
+
+      if ((revents & POLLIN) != 0) {
         if (drain_device_events(&devices[i], state, &server, &caps_was_active) <
             0) {
           close(devices[i].fd);
@@ -587,6 +616,9 @@ int main(void) {
   xkb_state_unref(state);
   xkb_keymap_unref(keymap);
   xkb_context_unref(context);
+  if (input_dir_fd >= 0) {
+    close(input_dir_fd);
+  }
   close_socket_server(&server);
   close_input_devices(devices, device_count);
   return EXIT_SUCCESS;

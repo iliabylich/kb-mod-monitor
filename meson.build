@@ -10,7 +10,10 @@ project(
 
 executable(
   'caps-lock-daemon',
-  'main.c',
+  files(
+    'ioctl-wrapper.c',
+    'main.c',
+  ),
   dependencies: [
     dependency('xkbcommon'),
   ],
