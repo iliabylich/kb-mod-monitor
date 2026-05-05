@@ -1,11 +1,5 @@
 # caps-lock-daemon
 
-```sh
-just setup
-just build
-sudo just run
-```
-
 Clients can connect to `/run/caps-lock-daemon.sock`. Each state change is sent as a single byte:
 
 - `1`: Caps Lock activated
@@ -13,13 +7,7 @@ Clients can connect to `/run/caps-lock-daemon.sock`. Each state change is sent a
 
 New clients receive the current state immediately after connecting.
 
-## testing
+## Testing
 
-```sh
-socat -u UNIX-CONNECT:/run/caps-lock-daemon.sock - | while IFS= read -r -n1 state; do
-    case "$state" in
-        1) echo "activated" ;;
-        0) echo "deactivated" ;;
-    esac;
-done
-```
++ `just run` builds and runs a daemon locally, requires sude because your user is not in the `input` group (and if you are you should really re-consider it), and so running as `root` is a must
++ `just connect` connects to a locally running instance using `socat`
