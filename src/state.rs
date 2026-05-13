@@ -1,36 +1,41 @@
 use crate::{
-    client::Client, device::Device, inotify::INotify, server::Server, xkb_state::XkbState,
+    client::Client,
+    inotify::INotify,
+    keyboard::{Keyboard, diff::KeyboardStateDiff, state::KeyboardState},
+    server::Server,
+    xkb_state::{XkbState, callbacks::XkbCallbacks},
 };
 use anyhow::{Result, bail};
+use evdev::KeyCode;
 use rustix::event::{PollFd, PollFlags};
 use std::{
     collections::HashMap,
     os::fd::{AsFd as _, AsRawFd},
-    rc::Rc,
 };
 
 pub struct State {
-    devices: HashMap<i32, Device>,
+    devices: HashMap<i32, Keyboard>,
     server: Server,
     clients: HashMap<i32, Client>,
     inotify: INotify,
-    caps_lock_is_active: bool,
 }
 
 impl State {
-    pub(crate) fn new() -> Result<Self> {
-        let (devices, caps_lock_is_active) = devices()?;
+    pub(crate) fn new() -> Result<(Self, KeyboardState)> {
+        let (devices, kb_state) = keyboards()?;
         let server = Server::new()?;
         let clients = HashMap::new();
         let inotify = INotify::new()?;
 
-        Ok(Self {
-            devices,
-            server,
-            clients,
-            inotify,
-            caps_lock_is_active,
-        })
+        Ok((
+            Self {
+                devices,
+                server,
+                clients,
+                inotify,
+            },
+            kb_state,
+        ))
     }
 
     fn pollfds(&self) -> Vec<PollFd<'_>> {
@@ -110,8 +115,8 @@ impl State {
         self.devices.remove(&fd);
     }
 
-    pub(crate) fn add_client(&mut self, client: Client) {
-        if let Err(err) = client.write(self.caps_lock_is_active) {
+    pub(crate) fn add_client(&mut self, client: Client, kb_state: KeyboardState) {
+        if let Err(err) = client.write(kb_state.as_diff()) {
             log::error!("{err:?}");
             return;
         }
@@ -120,13 +125,13 @@ impl State {
         self.clients.insert(fd, client);
     }
 
-    pub(crate) fn broadcast(&mut self, value: bool) {
-        log::info!("Sending {value} to {} clients..", self.clients.len());
+    pub(crate) fn broadcast(&mut self, diff: KeyboardStateDiff) {
+        log::info!("Sending {diff:?} to {} clients..", self.clients.len());
 
         let mut fds_to_drop = vec![];
 
         for (fd, client) in &self.clients {
-            if let Err(err) = client.write(value) {
+            if let Err(err) = client.write(diff) {
                 log::error!("{err:?}");
                 fds_to_drop.push(*fd);
             }
@@ -137,21 +142,11 @@ impl State {
         }
     }
 
-    pub(crate) const fn set_caps_lock_is_active(&mut self, value: bool) -> Option<bool> {
-        if self.caps_lock_is_active == value {
-            None
-        } else {
-            self.caps_lock_is_active = value;
-            Some(value)
-        }
-    }
-
-    pub(crate) fn update_devices(&mut self) -> Result<()> {
-        log::warn!("Updating input devices...");
-        let (devices, caps_lock_is_active) = devices()?;
+    pub(crate) fn update_devices(&mut self) -> Result<KeyboardState> {
+        log::warn!("New device in /dev, refreshing device list...");
+        let (devices, kb_state) = keyboards()?;
         self.devices = devices;
-        self.caps_lock_is_active = caps_lock_is_active;
-        Ok(())
+        Ok(kb_state)
     }
 }
 
@@ -180,31 +175,41 @@ impl From<PollFlags> for Op {
 }
 
 pub enum AppFd<'a> {
-    Device(&'a mut Device),
+    Device(&'a mut Keyboard),
     Server(&'a mut Server),
     INotify(&'a mut INotify),
 }
 
-fn devices() -> Result<(HashMap<i32, Device>, bool)> {
+fn keyboards() -> Result<(HashMap<i32, Keyboard>, KeyboardState)> {
     let xkb_state = XkbState::new()?;
-    let on_press = xkb_state.on_caps_lock_pressed();
-    let on_release = xkb_state.on_caps_lock_released();
+    let xkb_callbacks = XkbCallbacks::new(&xkb_state);
 
-    let mut devices = HashMap::new();
-    let mut caps_lock_is_active = false;
+    let mut keyboards = HashMap::new();
+    let mut kb_state = KeyboardState::empty();
     for (path, dev) in evdev::enumerate() {
-        let on_press = Rc::clone(&on_press);
-        let on_release = Rc::clone(&on_release);
+        let is_keyboard = dev.supported_keys().is_some_and(|keys| {
+            keys.contains(KeyCode::KEY_SPACE)
+                && keys.contains(KeyCode::KEY_A)
+                && keys.contains(KeyCode::KEY_Z)
+        });
 
-        let Some(device) = Device::new(path, dev, on_press, on_release)? else {
+        if !is_keyboard {
+            let name = dev.name().unwrap_or("<unnamed>");
+            log::trace!(
+                "Skipping non-keyboard device {name:?} at {}",
+                path.display()
+            );
             continue;
-        };
+        }
 
-        log::trace!("Found {device:?} (fd={})", device.as_raw_fd());
-        caps_lock_is_active |= device.caps_lock_led_is_active()?;
-        devices.insert(device.as_raw_fd(), device);
+        let keyboard = Keyboard::new(path, dev, xkb_callbacks.clone())?;
+
+        log::info!("Found {keyboard:?} (fd={})", keyboard.as_raw_fd());
+        let led_state = keyboard.led_based_state();
+        kb_state = kb_state | led_state;
+        keyboards.insert(keyboard.as_raw_fd(), keyboard);
     }
-    xkb_state.set_initial_caps_lock_state(caps_lock_is_active)?;
+    xkb_state.set_initial_state(kb_state);
 
-    Ok((devices, caps_lock_is_active))
+    Ok((keyboards, kb_state))
 }

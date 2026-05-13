@@ -1,9 +1,9 @@
 [Unit]
-Description=Caps Lock activation daemon
+Description=Keyboard modifier monitor
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/caps-lock-daemon
+ExecStart=/usr/bin/kb-mod-monitor
 Restart=on-failure
 RestartSec=5s
 

@@ -86,18 +86,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "caps-lock-daemon"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "env_logger",
- "evdev",
- "log",
- "rustix",
- "xkbcommon",
-]
-
-[[package]]
 name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -194,6 +182,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "kb-mod-monitor"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "env_logger",
+ "evdev",
+ "log",
+ "rustix",
+ "xkbcommon",
 ]
 
 [[package]]

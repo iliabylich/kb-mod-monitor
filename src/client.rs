@@ -1,3 +1,4 @@
+use crate::{key::Key, keyboard::diff::KeyboardStateDiff};
 use anyhow::{Result, ensure};
 use rustix::net::SendFlags;
 use std::os::fd::{AsFd, AsRawFd, OwnedFd};
@@ -11,10 +12,16 @@ impl Client {
         Self { fd }
     }
 
-    pub(crate) fn write(&self, value: bool) -> Result<()> {
-        let buf = &[if value { b'1' } else { b'0' }];
-        let bytes_written = rustix::net::send(&self.fd, buf, SendFlags::NOSIGNAL)?;
-        ensure!(bytes_written == 1);
+    pub(crate) fn write(&self, diff: KeyboardStateDiff) -> Result<()> {
+        let mut buf = vec![];
+        if let Some(v) = diff.get(Key::CapsLock) {
+            buf.push(if v { b'1' } else { b'0' });
+        }
+        if let Some(v) = diff.get(Key::NumLock) {
+            buf.push(if v { b'3' } else { b'2' });
+        }
+        let bytes_written = rustix::net::send(&self.fd, &buf, SendFlags::NOSIGNAL)?;
+        ensure!(bytes_written == buf.len());
         Ok(())
     }
 }

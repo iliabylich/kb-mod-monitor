@@ -12,13 +12,13 @@ pub struct Server {
     fd: OwnedFd,
 }
 
-const SOCKET_PATH: &str = "/run/caps-lock-daemon.sock";
+const SOCKET_PATH: &str = "/run/kb-mod-monitor.sock";
 const SOMAXCONN: i32 = 4096;
 
 impl Server {
     pub(crate) fn new() -> Result<Self> {
         let addr = SocketAddrUnix::new(SOCKET_PATH).context("failed to create sockaddr_un")?;
-        ensure_no_other_daemon_running(&addr)?;
+        ensure_no_other_process_running(&addr)?;
 
         let fd = rustix::net::socket(AddressFamily::UNIX, SocketType::STREAM, None)
             .context("socket() failed")?;
@@ -59,12 +59,12 @@ impl AsRawFd for Server {
     }
 }
 
-fn ensure_no_other_daemon_running(addr: &SocketAddrUnix) -> Result<()> {
+fn ensure_no_other_process_running(addr: &SocketAddrUnix) -> Result<()> {
     let fd = rustix::net::socket(AddressFamily::UNIX, SocketType::STREAM, None)
         .context("socket() failed")?;
 
     if rustix::net::connect(&fd, addr).is_ok() {
-        bail!("other daemon is running on the same UNIX socket {SOCKET_PATH}")
+        bail!("other process is running on the same UNIX socket {SOCKET_PATH}")
     }
 
     Ok(())

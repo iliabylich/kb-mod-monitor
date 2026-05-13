@@ -12,13 +12,15 @@
 #![warn(clippy::nursery)]
 
 use anyhow::Result;
+use keyboard::diff::KeyboardStateDiff;
 use state::{AppFd, State};
 
 use crate::client::Client;
 
 mod client;
-mod device;
 mod inotify;
+mod key;
+mod keyboard;
 mod server;
 mod state;
 mod xkb_state;
@@ -29,20 +31,18 @@ fn main() -> Result<()> {
         .write_style(env_logger::WriteStyle::Always)
         .init();
 
-    let mut state = State::new()?;
+    let (mut state, mut kb_state) = State::new()?;
 
     loop {
         let fds = state.poll_readable()?;
-        let mut caps_lock_activated = None;
+        let mut diff = KeyboardStateDiff::empty();
 
         for fd in fds {
             match state.classify_fd_mut(fd)? {
                 AppFd::Device(device) => match device.drain() {
-                    Ok(Some(value)) => {
-                        log::trace!("{device:?} - {value}");
-                        caps_lock_activated = Some(value);
+                    Ok(subdiff) => {
+                        diff = subdiff.or(diff);
                     }
-                    Ok(None) => {}
                     Err(err) => {
                         log::error!("{err:?}");
                         state.remove_device_by_fd(fd);
@@ -51,7 +51,7 @@ fn main() -> Result<()> {
 
                 AppFd::Server(server) => {
                     let fd = server.accept()?;
-                    state.add_client(Client::new(fd));
+                    state.add_client(Client::new(fd), kb_state);
                 }
 
                 AppFd::INotify(inotify) => {
@@ -61,14 +61,8 @@ fn main() -> Result<()> {
             }
         }
 
-        let Some(caps_lock_activated) = caps_lock_activated else {
-            continue;
-        };
-        log::trace!("=== Drained everyone, activated: {caps_lock_activated}");
-
-        let Some(changed_to) = state.set_caps_lock_is_active(caps_lock_activated) else {
-            continue;
-        };
-        state.broadcast(changed_to);
+        if let Some(diff_to_send) = kb_state.apply(diff) {
+            state.broadcast(diff_to_send);
+        }
     }
 }
