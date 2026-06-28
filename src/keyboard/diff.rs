@@ -6,13 +6,6 @@ pub struct KeyboardStateDiff {
     num_lock: Option<bool>,
 }
 
-impl std::ops::BitOrAssign for KeyboardStateDiff {
-    fn bitor_assign(&mut self, rhs: Self) {
-        self.caps_lock = rhs.caps_lock.or(self.caps_lock);
-        self.num_lock = rhs.num_lock.or(self.num_lock);
-    }
-}
-
 impl KeyboardStateDiff {
     pub(crate) const fn empty() -> Self {
         Self {

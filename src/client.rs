@@ -12,9 +12,9 @@ impl Client {
         Self { fd }
     }
 
-    pub(crate) fn read(&self) -> Result<()> {
-        let len = rustix::net::recv(&self.fd, &mut [0; 1], RecvFlags::empty())?;
-        log::info!("{len:?}");
+    pub(crate) fn read_write(&self, diff: KeyboardStateDiff) -> Result<()> {
+        rustix::net::recv(&self.fd, &mut [0; 1], RecvFlags::empty())?;
+        self.write(diff)?;
         Ok(())
     }
 

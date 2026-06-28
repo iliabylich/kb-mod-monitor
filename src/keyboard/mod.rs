@@ -5,7 +5,7 @@ use crate::{
 use anyhow::{Context, Result};
 use diff::KeyboardStateDiff;
 use evdev::{EventType, InputEvent, LedCode};
-use state::KeyboardState;
+pub use state::KeyboardState;
 use std::{
     io::ErrorKind,
     os::fd::{AsFd, AsRawFd},

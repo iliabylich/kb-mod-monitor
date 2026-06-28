@@ -1,5 +1,8 @@
 use anyhow::{Context as _, Result};
-use rustix::fs::inotify::{CreateFlags, WatchFlags};
+use rustix::{
+    event::{PollFd, PollFlags},
+    fs::inotify::{CreateFlags, WatchFlags},
+};
 use std::{
     io::ErrorKind,
     os::fd::{AsFd, AsRawFd, OwnedFd},
@@ -39,6 +42,10 @@ impl INotify {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn pollfds(&self) -> impl Iterator<Item = PollFd<'_>> {
+        std::iter::once(PollFd::new(&self.fd, PollFlags::IN))
     }
 }
 
