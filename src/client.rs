@@ -1,6 +1,6 @@
 use crate::{key::Key, keyboard::diff::KeyboardStateDiff};
 use anyhow::{Result, ensure};
-use rustix::net::SendFlags;
+use rustix::net::{RecvFlags, SendFlags};
 use std::os::fd::{AsFd, AsRawFd, OwnedFd};
 
 pub struct Client {
@@ -10,6 +10,12 @@ pub struct Client {
 impl Client {
     pub(crate) const fn new(fd: OwnedFd) -> Self {
         Self { fd }
+    }
+
+    pub(crate) fn read(&self) -> Result<()> {
+        let len = rustix::net::recv(&self.fd, &mut [0; 1], RecvFlags::empty())?;
+        log::info!("{len:?}");
+        Ok(())
     }
 
     pub(crate) fn write(&self, diff: KeyboardStateDiff) -> Result<()> {

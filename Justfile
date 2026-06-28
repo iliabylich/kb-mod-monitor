@@ -2,15 +2,7 @@ default:
     @just --list
 
 connect path:
-    #!/usr/bin/env bash
-    socat -u UNIX-CONNECT:{{path}} - | while IFS= read -r -n1 state; do
-        case "$state" in
-            0) echo "caps lock deactivated" ;;
-            1) echo "caps lock activated" ;;
-            2) echo "num lock deactivated" ;;
-            3) echo "num lock activated" ;;
-        esac;
-    done
+    cargo run --example cli -- {{path}}
 
 dev log_level='trace':
     cargo build && sudo RUST_LOG={{log_level}} ./target/debug/kb-mod-monitor --dev

@@ -43,6 +43,11 @@ impl State {
         self.devices
             .values()
             .map(|device| PollFd::new(device, PollFlags::IN))
+            .chain(
+                self.clients
+                    .values()
+                    .map(|client| PollFd::new(client, PollFlags::IN)),
+            )
             .chain([
                 PollFd::new(&self.server, PollFlags::IN),
                 PollFd::new(&self.inotify, PollFlags::IN),
@@ -107,6 +112,8 @@ impl State {
             Ok(AppFd::Server(&mut self.server))
         } else if self.inotify.as_raw_fd() == fd {
             Ok(AppFd::INotify(&mut self.inotify))
+        } else if let Some(client) = self.clients.get_mut(&fd) {
+            Ok(AppFd::Client(client))
         } else {
             bail!("unknown FD {fd}")
         }
@@ -116,12 +123,7 @@ impl State {
         self.devices.remove(&fd);
     }
 
-    pub(crate) fn add_client(&mut self, client: Client, kb_state: KeyboardState) {
-        if let Err(err) = client.write(kb_state.as_diff()) {
-            log::error!("{err:?}");
-            return;
-        }
-
+    pub(crate) fn add_client(&mut self, client: Client) {
         let fd = client.as_raw_fd();
         self.clients.insert(fd, client);
     }
@@ -179,6 +181,7 @@ pub enum AppFd<'a> {
     Device(&'a mut Keyboard),
     Server(&'a mut Server),
     INotify(&'a mut INotify),
+    Client(&'a mut Client),
 }
 
 fn keyboards() -> Result<(HashMap<i32, Keyboard>, KeyboardState)> {

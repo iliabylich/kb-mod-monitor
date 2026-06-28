@@ -1,10 +1,9 @@
-use std::{io::ErrorKind, os::fd::OwnedFd};
-
 use anyhow::{Context as _, Result, bail};
 use rustix::{
     fs::Mode,
     net::{AddressFamily, SocketAddrUnix, SocketType},
 };
+use std::{io::ErrorKind, os::fd::OwnedFd};
 
 #[derive(Debug)]
 pub struct Args {
@@ -65,11 +64,12 @@ fn systemd_socket() -> Result<OwnedFd> {
         .into_iter()
         .next()
         .context("sd_listen_fds() returned an empty list of FDs")?;
+    log::trace!("Listening on a systemd socket");
     Ok(fd.into_std())
 }
 
 fn dev_socket() -> Result<OwnedFd> {
-    const SOCKET_PATH: &str = "/run/kb-mod-monitor.sock";
+    const SOCKET_PATH: &str = "/run/kb-mod-monitor-dev.sock";
     const SOMAXCONN: i32 = 4096;
 
     let addr = SocketAddrUnix::new(SOCKET_PATH).context("failed to create sockaddr_un")?;
@@ -98,6 +98,8 @@ fn dev_socket() -> Result<OwnedFd> {
         .with_context(|| format!("failed to chmod(666) {SOCKET_PATH}"))?;
     rustix::net::listen(&fd, SOMAXCONN)
         .with_context(|| format!("failed to listen() {SOCKET_PATH}"))?;
+
+    log::trace!("Listening on {SOCKET_PATH}");
 
     Ok(fd)
 }

@@ -7,7 +7,7 @@ Clients can connect to `/run/kb-mod-monitor-{dev,systemd}.sock`. Each state chan
 - `2`: Num Lock deactivated
 - `3`: Num Lock activated
 
-New clients receive current state immediately after connecting.
+New clients DON'T receive current state after connecting, but if you send a single byte the daemon will write both current Caps Lock and Num Lock state as events (i.e. then you can expect two bytes to be sent back).
 
 ## systemd socket activation
 
@@ -19,5 +19,18 @@ These two options co-exist to let both development and release builds run in par
 
 ## Testing
 
-+ `just run` builds and runs locally, requires `sudo` because your user is not in the `input` group (and if you are you should really re-consider it), and so running as `root` is a must
-+ `just connect /path/to/socket` runs a Bash script that connects to a locally running instance using `socat` (that is either a dev build or the one managed by systemd)
++ `just run` builds and runs locally in `--dev` mode, requires `sudo` because your user is not in the `input` group (and if you are you should really re-consider it), and so running as `root` is a must
++ `just connect /path/to/socket` runs an example that connects to a locally running instance
+
+Alternatively the following here's a quick demo using `socat`:
+
+```bash
+socat -u UNIX-CONNECT:/path/to/socket - | while IFS= read -r -n1 state; do
+    case "$state" in
+        0) echo "caps lock deactivated" ;;
+        1) echo "caps lock activated" ;;
+        2) echo "num lock deactivated" ;;
+        3) echo "num lock activated" ;;
+    esac;
+done
+```

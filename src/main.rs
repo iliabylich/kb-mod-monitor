@@ -54,7 +54,12 @@ fn main() -> Result<()> {
 
                 AppFd::Server(server) => {
                     let fd = server.accept()?;
-                    state.add_client(Client::new(fd), kb_state);
+                    state.add_client(Client::new(fd));
+                }
+
+                AppFd::Client(client) => {
+                    client.read()?;
+                    client.write(kb_state.as_diff())?;
                 }
 
                 AppFd::INotify(inotify) => {
