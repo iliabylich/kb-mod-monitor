@@ -12,11 +12,12 @@
 #![warn(clippy::nursery)]
 
 use anyhow::Result;
+use args::Args;
+use client::Client;
 use keyboard::diff::KeyboardStateDiff;
 use state::{AppFd, State};
 
-use crate::client::Client;
-
+mod args;
 mod client;
 mod inotify;
 mod key;
@@ -30,8 +31,10 @@ fn main() -> Result<()> {
         .format_target(false)
         .write_style(env_logger::WriteStyle::Always)
         .init();
+    let args = Args::parse();
+    log::trace!("Running with args {args:?}");
 
-    let (mut state, mut kb_state) = State::new()?;
+    let (mut state, mut kb_state) = State::new(&args)?;
 
     loop {
         let fds = state.poll_readable()?;

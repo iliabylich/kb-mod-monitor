@@ -1,11 +1,7 @@
 [Unit]
-Description=Keyboard modifier monitor
+Description=Keyboard modifier monitor service
+Requires=kb-mod-monitor.socket
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/kb-mod-monitor
-Restart=on-failure
-RestartSec=5s
-
-[Install]
-WantedBy=multi-user.target
+ExecStart=/usr/bin/kb-mod-monitor --systemd

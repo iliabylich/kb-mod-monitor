@@ -1,4 +1,5 @@
 use crate::{
+    args::Args,
     client::Client,
     inotify::INotify,
     keyboard::{Keyboard, diff::KeyboardStateDiff, state::KeyboardState},
@@ -21,9 +22,9 @@ pub struct State {
 }
 
 impl State {
-    pub(crate) fn new() -> Result<(Self, KeyboardState)> {
+    pub(crate) fn new(args: &Args) -> Result<(Self, KeyboardState)> {
         let (devices, kb_state) = keyboards()?;
-        let server = Server::new()?;
+        let server = Server::new(args)?;
         let clients = HashMap::new();
         let inotify = INotify::new()?;
 

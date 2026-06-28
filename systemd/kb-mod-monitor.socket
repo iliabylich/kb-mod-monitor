@@ -1,0 +1,8 @@
+[Unit]
+Description=Keyboard modifier monitor socket
+
+[Socket]
+ListenStream=/run/kb-mod-monitor-systemd.sock
+
+[Install]
+WantedBy=sockets.target
