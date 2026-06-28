@@ -32,10 +32,10 @@ impl KeyboardStateDiff {
         }
     }
 
-    pub(crate) fn or(self, fallback: Self) -> Self {
+    pub(crate) fn merge(first: Self, second: Self) -> Self {
         Self {
-            caps_lock: self.caps_lock.or(fallback.caps_lock),
-            num_lock: self.num_lock.or(fallback.num_lock),
+            caps_lock: second.caps_lock.or(first.caps_lock),
+            num_lock: second.num_lock.or(first.num_lock),
         }
     }
 }

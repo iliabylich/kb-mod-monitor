@@ -56,7 +56,9 @@ fn main() -> Result<()> {
             KeyboardEvents::Updates(events) => {
                 for event in events {
                     match event {
-                        KeyboardEvent::Changed(fd) => diff = devices.drain(fd).or(diff),
+                        KeyboardEvent::Changed(fd) => {
+                            diff = KeyboardStateDiff::merge(diff, devices.drain(fd))
+                        }
                         KeyboardEvent::Removed(fd) => devices.remove(fd),
                     }
                 }

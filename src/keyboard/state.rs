@@ -53,15 +53,11 @@ impl KeyboardState {
 
         if out.is_empty() { None } else { Some(out) }
     }
-}
 
-impl std::ops::BitOr for KeyboardState {
-    type Output = Self;
-
-    fn bitor(self, rhs: Self) -> Self::Output {
+    pub(crate) const fn or(self, other: Self) -> Self {
         Self {
-            caps_lock: self.caps_lock | rhs.caps_lock,
-            num_lock: self.num_lock | rhs.num_lock,
+            caps_lock: self.caps_lock | other.caps_lock,
+            num_lock: self.num_lock | other.num_lock,
         }
     }
 }

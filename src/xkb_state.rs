@@ -6,8 +6,6 @@ use xkbcommon::xkb::{
     State,
 };
 
-pub mod callbacks;
-
 pub struct XkbState {
     state: Rc<RefCell<State>>,
 }
@@ -47,10 +45,10 @@ impl XkbState {
         state.update_mask(0, 0, locked_mods, 0, 0, 0);
     }
 
-    pub(crate) fn on_mod_toggle(&self, key: Key, dir: Dir) -> Rc<dyn Fn() -> bool> {
+    pub(crate) fn callback(&self) -> Rc<dyn Fn(Key, Dir) -> bool> {
         let state = Rc::clone(&self.state);
 
-        Rc::new(move || {
+        Rc::new(move |key: Key, dir: Dir| {
             let mut state = state.borrow_mut();
             state.update_key(key.xkb_key_code(), KeyDirection::from(dir));
             state.mod_name_is_active(key.xkb_mod_name(), STATE_MODS_LOCKED)

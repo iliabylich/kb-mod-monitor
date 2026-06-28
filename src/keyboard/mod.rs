@@ -1,7 +1,4 @@
-use crate::{
-    key::Key,
-    xkb_state::{Dir, callbacks::XkbCallbacks},
-};
+use crate::{key::Key, xkb_state::Dir};
 use anyhow::{Context, Result};
 use diff::KeyboardStateDiff;
 use evdev::{EventType, InputEvent, LedCode};
@@ -10,6 +7,7 @@ use std::{
     io::ErrorKind,
     os::fd::{AsFd, AsRawFd},
     path::PathBuf,
+    rc::Rc,
 };
 
 pub mod diff;
@@ -19,14 +17,14 @@ pub struct Keyboard {
     name: String,
     dev: evdev::Device,
     path: PathBuf,
-    xkb_callbacks: XkbCallbacks,
+    xkb_callback: Rc<dyn Fn(Key, Dir) -> bool>,
 }
 
 impl Keyboard {
     pub(crate) fn new(
         path: PathBuf,
         dev: evdev::Device,
-        xkb_callbacks: XkbCallbacks,
+        xkb_callback: Rc<dyn Fn(Key, Dir) -> bool>,
     ) -> Result<Self> {
         let name = dev.name().unwrap_or("<unnamed>").to_string();
 
@@ -41,7 +39,7 @@ impl Keyboard {
             name,
             dev,
             path,
-            xkb_callbacks,
+            xkb_callback,
         })
     }
 
@@ -70,12 +68,12 @@ impl Keyboard {
                     0 => {
                         // release
                         log::trace!("{key:?} released on {:?}", self.name);
-                        diff.set(key, Some(self.xkb_callbacks.dispatch(key, Dir::Up)));
+                        diff.set(key, Some((self.xkb_callback)(key, Dir::Up)));
                     }
                     1 => {
                         // press
                         log::trace!("{key:?} pressed on {:?}", self.name);
-                        diff.set(key, Some(self.xkb_callbacks.dispatch(key, Dir::Down)));
+                        diff.set(key, Some((self.xkb_callback)(key, Dir::Down)));
                     }
                     _ => {}
                 }

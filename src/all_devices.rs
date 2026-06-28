@@ -1,6 +1,6 @@
 use crate::{
     keyboard::{Keyboard, diff::KeyboardStateDiff, state::KeyboardState},
-    xkb_state::{XkbState, callbacks::XkbCallbacks},
+    xkb_state::XkbState,
 };
 use anyhow::Result;
 use evdev::KeyCode;
@@ -14,7 +14,7 @@ pub struct AllDevices {
 impl AllDevices {
     pub(crate) fn new() -> Result<(Self, KeyboardState)> {
         let xkb_state = XkbState::new()?;
-        let xkb_callbacks = XkbCallbacks::new(&xkb_state);
+        let xkb_callback = xkb_state.callback();
 
         let mut fd_to_keyboard = HashMap::new();
         let mut kb_state = KeyboardState::empty();
@@ -34,11 +34,11 @@ impl AllDevices {
                 continue;
             }
 
-            let keyboard = Keyboard::new(path, dev, xkb_callbacks.clone())?;
+            let keyboard = Keyboard::new(path, dev, xkb_callback.clone())?;
 
             log::info!("Found {keyboard:?} (fd={})", keyboard.as_raw_fd());
             let led_state = keyboard.led_based_state();
-            kb_state = kb_state | led_state;
+            kb_state = kb_state.or(led_state);
             fd_to_keyboard.insert(keyboard.as_raw_fd(), keyboard);
         }
         xkb_state.set_initial_state(kb_state);
