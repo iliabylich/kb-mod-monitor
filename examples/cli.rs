@@ -36,10 +36,10 @@ fn main() -> Result<()> {
             println!(
                 "{}",
                 match &byte {
-                    b'0' => "CapsLock activated",
-                    b'1' => "CapsLock deactivated",
-                    b'2' => "NumLock activated",
-                    b'3' => "NumLock deactivated",
+                    b'1' => "CapsLock activated",
+                    b'0' => "CapsLock deactivated",
+                    b'3' => "NumLock activated",
+                    b'4' => "NumLock deactivated",
                     _ => panic!("Unknown byte received: {byte}"),
                 }
             );

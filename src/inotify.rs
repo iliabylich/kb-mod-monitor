@@ -44,8 +44,8 @@ impl INotify {
         Ok(())
     }
 
-    pub(crate) fn pollfds(&self) -> impl Iterator<Item = PollFd<'_>> {
-        std::iter::once(PollFd::new(&self.fd, PollFlags::IN))
+    pub(crate) fn pollfd(&self) -> PollFd<'_> {
+        PollFd::new(&self.fd, PollFlags::IN)
     }
 }
 

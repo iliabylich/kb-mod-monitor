@@ -13,3 +13,4 @@ log = "0.4"
 rustix = { version = "1.1", features = ["fs", "event", "net"] }
 xkbcommon = { version = "0.9", features = ["wayland"] }
 sd-listen-fds = "0.2"
+pollsendd = { version = "0.1.0" }

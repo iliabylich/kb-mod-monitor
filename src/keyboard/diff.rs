@@ -32,10 +32,14 @@ impl KeyboardStateDiff {
         }
     }
 
-    pub(crate) fn merge(first: Self, second: Self) -> Self {
-        Self {
-            caps_lock: second.caps_lock.or(first.caps_lock),
-            num_lock: second.num_lock.or(first.num_lock),
+    pub(crate) fn serialize(self) -> Vec<u8> {
+        let mut buf = vec![];
+        if let Some(v) = self.get(Key::CapsLock) {
+            buf.push(if v { b'1' } else { b'0' });
         }
+        if let Some(v) = self.get(Key::NumLock) {
+            buf.push(if v { b'3' } else { b'2' });
+        }
+        buf
     }
 }
