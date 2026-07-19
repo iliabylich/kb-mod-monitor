@@ -10,7 +10,7 @@ pub struct KbModService {
     inotify: INotify,
 }
 
-impl Service for KbModService {
+impl Service<1> for KbModService {
     type Error = KbModServiceError;
 
     fn pollfds(&mut self) -> Result<impl Iterator<Item = PollFd<'_>>, Self::Error> {
@@ -50,8 +50,14 @@ impl Service for KbModService {
         Err(anyhow::anyhow!("KbMod poll error: got revents {revents:?} for FD {fd}").into())
     }
 
-    fn state_as_serialized_bufs(&self) -> impl Iterator<Item = Vec<u8>> {
-        [self.kb_state.as_diff().serialize()].into_iter()
+    fn on_client_connected(&mut self, mut write: impl FnMut(Vec<u8>)) -> Result<(), Self::Error> {
+        let buf = self.kb_state.as_diff().serialize();
+        (write)(buf);
+        Ok(())
+    }
+
+    fn on_client_request(&mut self, _request: [u8; 1]) -> Result<(), Self::Error> {
+        Ok(())
     }
 }
 
