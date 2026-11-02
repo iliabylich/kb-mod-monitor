@@ -19,8 +19,8 @@ These two options co-exist to let both development and release builds run in par
 
 ## Testing
 
-+ `just run` builds and runs locally in `--dev` mode, requires `sudo` because your user is not in the `input` group (and if you are you should really re-consider it), and so running as `root` is a must
-+ `just connect /path/to/socket` runs an example that connects to a locally running instance
++ `mise run dev` builds and runs locally in `--dev` mode, requires `sudo` because your user is not in the `input` group (and if you are you should really re-consider it), and so running as `root` is a must
++ `mise run connect /path/to/socket` runs an example that connects to a locally running instance
 
 Alternatively the following here's a quick demo using `socat`:
 
