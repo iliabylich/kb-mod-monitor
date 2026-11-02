@@ -1,2 +1,3 @@
 /target
 Cargo.lock
+/kb-mod-monitor-dev.sock

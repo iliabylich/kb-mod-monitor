@@ -1,5 +1,5 @@
 [tasks.connect]
-usage = 'arg "<path>"'
+usage = 'arg "[path]" default="kb-mod-monitor-dev.sock"'
 run = 'cargo run --example cli -- {{usage.path}}'
 
 [tasks.build]

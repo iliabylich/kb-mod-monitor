@@ -37,7 +37,7 @@ fn main() -> Result<()> {
     let service = KbModService::new()?;
     let mut rt = match args.mode {
         RunMode::Systemd => Runtime::new_with_systemd_socket(service),
-        RunMode::Dev => Runtime::new_with_socket_path("/run/kb-mod-monitor-dev.sock", service),
+        RunMode::Dev => Runtime::new_with_socket_path("kb-mod-monitor-dev.sock", service),
     }?;
 
     loop {
